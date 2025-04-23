@@ -8,6 +8,7 @@ import (
 func (cfg *apiConfig) MiddlewareMetricsInc(next http.Handler) http.Handler {
 	newHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cfg.fileserverHits.Add(1)
+		next.ServeHTTP(w, r)
 	})
 	return newHandler
 }
