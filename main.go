@@ -27,7 +27,7 @@ func main() {
 	//takes in the "/healthz" endpoint
 	//takes in a function with the signature "func(http.ResponseWriter, *http.Request)"
 	//It automatically converts your function to a handler interface
-	serveMux.HandleFunc("/healthz", func(w http.ResponseWriter, req *http.Request) {
+	serveMux.HandleFunc("GET /api/healthz", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
@@ -44,10 +44,10 @@ func main() {
 	serveMux.Handle("/app/", counter.MiddlewareMetricsInc(appHandler))
 
 	//register the metrics handler
-	serveMux.HandleFunc("/metrics", counter.RequestNum)
+	serveMux.HandleFunc("GET /admin/metrics", counter.RequestNum)
 
 	//register the reset handler
-	serveMux.HandleFunc("/reset", counter.resetNum)
+	serveMux.HandleFunc("POST /admin/reset", counter.resetNum)
 
 	//making the server struct
 	myServer := &http.Server{
