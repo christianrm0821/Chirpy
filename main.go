@@ -3,11 +3,19 @@ package main
 import (
 	"log"
 	"net/http"
+	"sync/atomic"
 )
+
+type apiConfig struct {
+	fileserverHits atomic.Int32
+}
 
 func main() {
 	//making a newserveMux
 	const port = ":8080"
+
+	//keeps count of how many requests are being made
+	var counter apiConfig
 
 	//mux or multiplexer
 	//it is a request router
@@ -32,7 +40,14 @@ func main() {
 	//Strip prefix takes away the prefix "/app" from the handler
 	//FileServer is a built in handler, automatically handles file serving, content types, and directory listings
 	//FileServer serves static content
-	serveMux.Handle("/app/", http.StripPrefix("/app", http.FileServer(http.Dir("."))))
+	appHandler := http.StripPrefix("/app", http.FileServer(http.Dir(".")))
+	serveMux.Handle("/app/", counter.MiddlewareMetricsInc(appHandler))
+
+	//register the metrics handler
+	serveMux.HandleFunc("/metrics", counter.RequestNum)
+
+	//register the reset handler
+	serveMux.HandleFunc("/reset", counter.resetNum)
 
 	//making the server struct
 	myServer := &http.Server{
