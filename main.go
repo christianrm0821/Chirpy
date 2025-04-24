@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"sync/atomic"
@@ -48,6 +49,58 @@ func main() {
 
 	//register the reset handler
 	serveMux.HandleFunc("POST /admin/reset", counter.resetNum)
+
+	//register the validate_chirp handler
+	serveMux.HandleFunc("POST /api/validate_chirp", func(w http.ResponseWriter, r *http.Request) {
+		type req struct {
+			Body string `json:"body"`
+		}
+		//create a type for each one of the responses we can give
+		type resErr struct {
+			Error string `json:"error"`
+		}
+		type resValid struct {
+			Valid bool `json:"valid"`
+		}
+
+		//get the information and putting it into request
+		decoder := json.NewDecoder(r.Body)
+		request := req{}
+		err := decoder.Decode(&request)
+		//handling general error with decoding
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			log.Printf("error decoding: %v", err)
+			w.WriteHeader(500)
+			generalErr := resErr{
+				Error: "Something went wrong",
+			}
+			res, _ := json.Marshal(generalErr)
+			w.Write(res)
+			return
+		}
+		//handling if the length of the request body(the message) is too long
+		if len(request.Body) > 140 {
+			w.Header().Set("Content-Type", "application/json")
+			log.Println("Chirp is too long")
+			w.WriteHeader(400)
+			lenErr := resErr{
+				Error: "Chirp is too long",
+			}
+			res, _ := json.Marshal(lenErr)
+			w.Write(res)
+			return
+		}
+
+		//handling if the request was successful
+		w.WriteHeader(200)
+		valRes := resValid{
+			Valid: true,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		res, _ := json.Marshal(valRes)
+		w.Write(res)
+	})
 
 	//making the server struct
 	myServer := &http.Server{
