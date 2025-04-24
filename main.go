@@ -2,13 +2,51 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"sync/atomic"
 )
 
+// to count number of times site is visited(hits)
 type apiConfig struct {
 	fileserverHits atomic.Int32
+}
+
+// response types
+type req struct {
+	Body string `json:"body"`
+}
+
+type resClean struct {
+	CleanedBody string `json:"cleaned_body"`
+}
+
+type resErr struct {
+	Error string `json:"error"`
+}
+
+/*
+type resValid struct {
+	Valid bool `json:"valid"`
+}
+*/
+
+func respondWithError(w http.ResponseWriter, code int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	generalErr := resErr{
+		Error: msg,
+	}
+	res, _ := json.Marshal(generalErr)
+	w.Write(res)
+}
+
+func respondWithJson(w http.ResponseWriter, code int, payload interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	res, _ := json.Marshal(payload)
+	w.Write(res)
 }
 
 func main() {
@@ -52,54 +90,30 @@ func main() {
 
 	//register the validate_chirp handler
 	serveMux.HandleFunc("POST /api/validate_chirp", func(w http.ResponseWriter, r *http.Request) {
-		type req struct {
-			Body string `json:"body"`
-		}
-		//create a type for each one of the responses we can give
-		type resErr struct {
-			Error string `json:"error"`
-		}
-		type resValid struct {
-			Valid bool `json:"valid"`
-		}
-
 		//get the information and putting it into request
 		decoder := json.NewDecoder(r.Body)
 		request := req{}
 		err := decoder.Decode(&request)
 		//handling general error with decoding
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			log.Printf("error decoding: %v", err)
-			w.WriteHeader(500)
-			generalErr := resErr{
-				Error: "Something went wrong",
-			}
-			res, _ := json.Marshal(generalErr)
-			w.Write(res)
+			errMsg := fmt.Sprintf("error decoding: %v", err)
+			respondWithError(w, 500, errMsg)
 			return
 		}
 		//handling if the length of the request body(the message) is too long
 		if len(request.Body) > 140 {
-			w.Header().Set("Content-Type", "application/json")
-			log.Println("Chirp is too long")
-			w.WriteHeader(400)
-			lenErr := resErr{
-				Error: "Chirp is too long",
-			}
-			res, _ := json.Marshal(lenErr)
-			w.Write(res)
+			respondWithError(w, 400, "Chirp is too long")
 			return
 		}
 
 		//handling if the request was successful
-		w.WriteHeader(200)
-		valRes := resValid{
-			Valid: true,
-		}
-		w.Header().Set("Content-Type", "application/json")
-		res, _ := json.Marshal(valRes)
-		w.Write(res)
+		fmt.Printf("request body: %v", request.Body)
+		cleanText := ValidString(request.Body)
+		fmt.Println(cleanText)
+
+		respondWithJson(w, 200, resClean{
+			CleanedBody: cleanText,
+		})
 	})
 
 	//making the server struct
@@ -114,5 +128,4 @@ func main() {
 	if err != http.ErrServerClosed {
 		log.Fatal("server error: ", err)
 	}
-
 }
