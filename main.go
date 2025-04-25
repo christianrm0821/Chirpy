@@ -1,16 +1,26 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"sync/atomic"
+	"time"
+
+	"github.com/christianrm0821/Chirpy/internal/database"
+	"github.com/google/uuid"
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 )
 
 // to count number of times site is visited(hits)
 type apiConfig struct {
 	fileserverHits atomic.Int32
+	dbQueries      *database.Queries
+	PLATFORM       string
 }
 
 // response types
@@ -26,11 +36,16 @@ type resErr struct {
 	Error string `json:"error"`
 }
 
-/*
-type resValid struct {
-	Valid bool `json:"valid"`
+type email struct {
+	Email string `json:"email"`
 }
-*/
+
+type userReturnEmail struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAT time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
+}
 
 func respondWithError(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
@@ -50,11 +65,24 @@ func respondWithJson(w http.ResponseWriter, code int, payload interface{}) {
 }
 
 func main() {
+	godotenv.Load()
+	dbURL := os.Getenv("DB_URL")
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatal("error: ", err)
+		return
+	}
+
 	//making a newserveMux
 	const port = ":8080"
 
 	//keeps count of how many requests are being made
-	var counter apiConfig
+	counter := apiConfig{
+		fileserverHits: atomic.Int32{},
+		dbQueries:      database.New(db),
+		PLATFORM:       "dev",
+	}
+	counter.fileserverHits.Store(0)
 
 	//mux or multiplexer
 	//it is a request router
@@ -86,7 +114,31 @@ func main() {
 	serveMux.HandleFunc("GET /admin/metrics", counter.RequestNum)
 
 	//register the reset handler
-	serveMux.HandleFunc("POST /admin/reset", counter.resetNum)
+	serveMux.HandleFunc("POST /admin/reset", counter.resetComplete)
+
+	//register the users handler
+	serveMux.HandleFunc("POST /api/users", func(w http.ResponseWriter, r *http.Request) {
+		decoder := json.NewDecoder(r.Body)
+		request := email{}
+		err := decoder.Decode(&request)
+		if err != nil {
+			errMsg := fmt.Sprintf("error decoding: %v", err)
+			respondWithError(w, 500, errMsg)
+			return
+		}
+		user, err := counter.dbQueries.CreateUser(r.Context(), request.Email)
+		if err != nil {
+			errMsg := fmt.Sprintf("error creating user: %v", err)
+			respondWithError(w, 500, errMsg)
+			return
+		}
+		respondWithJson(w, 201, userReturnEmail{
+			ID:        user.ID,
+			CreatedAT: user.CreatedAt,
+			UpdatedAt: user.UpdatedAt,
+			Email:     user.Email,
+		})
+	})
 
 	//register the validate_chirp handler
 	serveMux.HandleFunc("POST /api/validate_chirp", func(w http.ResponseWriter, r *http.Request) {
@@ -124,7 +176,7 @@ func main() {
 
 	//start an http server with the port and handler we created above/ handles any errors
 	log.Println("Starting server on port #", port)
-	err := myServer.ListenAndServe()
+	err = myServer.ListenAndServe()
 	if err != http.ErrServerClosed {
 		log.Fatal("server error: ", err)
 	}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 )
 
@@ -23,6 +24,16 @@ func (cfg *apiConfig) RequestNum(w http.ResponseWriter, r *http.Request) {
 }
 
 // resets the number of requests made
-func (cfg *apiConfig) resetNum(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) resetComplete(w http.ResponseWriter, r *http.Request) {
+	if cfg.PLATFORM != "dev" {
+		errMsg := fmt.Sprintln("error platform not dev")
+		respondWithError(w, 500, errMsg)
+		return
+	}
 	cfg.fileserverHits.Store(0)
+	err := cfg.dbQueries.DeleteUsers(r.Context())
+	if err != nil {
+		log.Fatal("error with reset: ", err)
+		return
+	}
 }
