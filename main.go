@@ -79,6 +79,17 @@ func respondWithJson(w http.ResponseWriter, code int, payload interface{}) {
 	w.Write(res)
 }
 
+func mapChirpToValidChirp(myChirp database.Chirp) validChirp {
+	valChirp := validChirp{
+		ID:        myChirp.ID,
+		CreatedAT: myChirp.CreatedAt,
+		UpdatedAt: myChirp.UpdatedAt,
+		Body:      myChirp.Body,
+		UserID:    myChirp.UserID,
+	}
+	return valChirp
+}
+
 func main() {
 	godotenv.Load()
 	dbURL := os.Getenv("DB_URL")
@@ -188,13 +199,24 @@ func main() {
 			respondWithError(w, 500, errMsg)
 			return
 		}
-		respondWithJson(w, 201, validChirp{
-			ID:        myChirp.ID,
-			CreatedAT: myChirp.CreatedAt,
-			UpdatedAt: myChirp.UpdatedAt,
-			Body:      myChirp.Body,
-			UserID:    myChirp.UserID,
-		})
+		valChirp := mapChirpToValidChirp(myChirp)
+		respondWithJson(w, 201, valChirp)
+	})
+
+	//register getting all chirps in database
+	serveMux.HandleFunc("GET /api/chirps", func(w http.ResponseWriter, r *http.Request) {
+		chirps, err := counter.dbQueries.GetAllChirps(r.Context())
+		if err != nil {
+			errmsg := fmt.Sprintf("error getting the chirps: %v", err)
+			respondWithError(w, 500, errmsg)
+			return
+		}
+		var valChirps []validChirp
+		for _, val := range chirps {
+			tmpChirp := mapChirpToValidChirp(val)
+			valChirps = append(valChirps, tmpChirp)
+		}
+		respondWithJson(w, 200, valChirps)
 	})
 
 	//making the server struct
