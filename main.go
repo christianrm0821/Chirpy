@@ -24,6 +24,7 @@ type apiConfig struct {
 }
 
 // response types
+/*
 type req struct {
 	Body string `json:"body"`
 }
@@ -31,6 +32,7 @@ type req struct {
 type resClean struct {
 	CleanedBody string `json:"cleaned_body"`
 }
+*/
 
 type resErr struct {
 	Error string `json:"error"`
@@ -45,6 +47,19 @@ type userReturnEmail struct {
 	CreatedAT time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Email     string    `json:"email"`
+}
+
+type chirpPostReq struct {
+	Body   string    `json:"body"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+type validChirp struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAT time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Body      string    `json:"body"`
+	UserID    uuid.UUID `json:"user_id"`
 }
 
 func respondWithError(w http.ResponseWriter, code int, msg string) {
@@ -141,10 +156,10 @@ func main() {
 	})
 
 	//register the validate_chirp handler
-	serveMux.HandleFunc("POST /api/validate_chirp", func(w http.ResponseWriter, r *http.Request) {
+	serveMux.HandleFunc("POST /api/chirps", func(w http.ResponseWriter, r *http.Request) {
 		//get the information and putting it into request
 		decoder := json.NewDecoder(r.Body)
-		request := req{}
+		request := chirpPostReq{}
 		err := decoder.Decode(&request)
 		//handling general error with decoding
 		if err != nil {
@@ -163,8 +178,22 @@ func main() {
 		cleanText := ValidString(request.Body)
 		fmt.Println(cleanText)
 
-		respondWithJson(w, 200, resClean{
-			CleanedBody: cleanText,
+		input := database.CreateChirpParams{
+			Body:   cleanText,
+			UserID: request.UserID,
+		}
+		myChirp, err := counter.dbQueries.CreateChirp(r.Context(), input)
+		if err != nil {
+			errMsg := fmt.Sprintf("error creating chirp: %v", err)
+			respondWithError(w, 500, errMsg)
+			return
+		}
+		respondWithJson(w, 201, validChirp{
+			ID:        myChirp.ID,
+			CreatedAT: myChirp.CreatedAt,
+			UpdatedAt: myChirp.UpdatedAt,
+			Body:      myChirp.Body,
+			UserID:    myChirp.UserID,
 		})
 	})
 
