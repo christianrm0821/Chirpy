@@ -219,6 +219,17 @@ func main() {
 		respondWithJson(w, 200, valChirps)
 	})
 
+	serveMux.HandleFunc("GET /api/chirps/{chirpID}", func(w http.ResponseWriter, r *http.Request) {
+		chirpID := r.PathValue("chirpID")
+		myChirp, err := counter.dbQueries.GetChirpWithID(r.Context(), uuid.MustParse(chirpID))
+		if err != nil {
+			errmsg := fmt.Sprintf("error getting this chirp: %v", err)
+			respondWithError(w, 404, errmsg)
+			return
+		}
+		respondWithJson(w, 200, mapChirpToValidChirp(myChirp))
+	})
+
 	//making the server struct
 	myServer := &http.Server{
 		Addr:    port,
