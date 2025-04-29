@@ -8,59 +8,13 @@ import (
 	"net/http"
 	"os"
 	"sync/atomic"
-	"time"
 
+	"github.com/christianrm0821/Chirpy/internal/auth"
 	"github.com/christianrm0821/Chirpy/internal/database"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
-
-// to count number of times site is visited(hits)
-type apiConfig struct {
-	fileserverHits atomic.Int32
-	dbQueries      *database.Queries
-	PLATFORM       string
-}
-
-// response types
-/*
-type req struct {
-	Body string `json:"body"`
-}
-
-type resClean struct {
-	CleanedBody string `json:"cleaned_body"`
-}
-*/
-
-type resErr struct {
-	Error string `json:"error"`
-}
-
-type email struct {
-	Email string `json:"email"`
-}
-
-type userReturnEmail struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAT time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
-}
-
-type chirpPostReq struct {
-	Body   string    `json:"body"`
-	UserID uuid.UUID `json:"user_id"`
-}
-
-type validChirp struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAT time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Body      string    `json:"body"`
-	UserID    uuid.UUID `json:"user_id"`
-}
 
 func respondWithError(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
@@ -144,6 +98,7 @@ func main() {
 
 	//register the users handler
 	serveMux.HandleFunc("POST /api/users", func(w http.ResponseWriter, r *http.Request) {
+		//make a decoder to get the request information
 		decoder := json.NewDecoder(r.Body)
 		request := email{}
 		err := decoder.Decode(&request)
@@ -152,7 +107,21 @@ func main() {
 			respondWithError(w, 500, errMsg)
 			return
 		}
-		user, err := counter.dbQueries.CreateUser(r.Context(), request.Email)
+
+		//hash password
+		hashed_password, err := auth.HashPassword(request.Password)
+		if err != nil {
+			log.Fatal("error hashing the password: ", err)
+			errMsg := fmt.Sprintf("error hashing password %v", err)
+			respondWithError(w, 500, errMsg)
+		}
+
+		myEmailStruct := database.CreateUserParams{
+			Email:          request.Email,
+			HashedPassword: hashed_password,
+		}
+
+		user, err := counter.dbQueries.CreateUser(r.Context(), myEmailStruct)
 		if err != nil {
 			errMsg := fmt.Sprintf("error creating user: %v", err)
 			respondWithError(w, 500, errMsg)
@@ -164,6 +133,35 @@ func main() {
 			UpdatedAt: user.UpdatedAt,
 			Email:     user.Email,
 		})
+	})
+
+	//register the login handler
+	serveMux.HandleFunc("POST /api/login", func(w http.ResponseWriter, r *http.Request) {
+		decoder := json.NewDecoder(r.Body)
+		request := email{}
+		err := decoder.Decode(&request)
+		if err != nil {
+			errMsg := fmt.Sprintf("error decoding: %v", err)
+			respondWithError(w, 500, errMsg)
+			return
+		}
+		user, err := counter.dbQueries.GetUserByEmail(r.Context(), request.Email)
+		if err != nil {
+			respondWithError(w, 401, "Unauthorized")
+			return
+		}
+		err = auth.CheckPasswordHash(user.HashedPassword, request.Password)
+		if err != nil {
+			respondWithError(w, 401, "Unauthorized")
+			return
+		}
+		respondWithJson(w, 200, userReturnEmail{
+			ID:        user.ID,
+			CreatedAT: user.CreatedAt,
+			UpdatedAt: user.UpdatedAt,
+			Email:     user.Email,
+		})
+
 	})
 
 	//register the validate_chirp handler
