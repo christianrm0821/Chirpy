@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"sync/atomic"
+	"time"
 
 	"github.com/christianrm0821/Chirpy/internal/auth"
 	"github.com/christianrm0821/Chirpy/internal/database"
@@ -60,7 +61,8 @@ func main() {
 	counter := apiConfig{
 		fileserverHits: atomic.Int32{},
 		dbQueries:      database.New(db),
-		PLATFORM:       "dev",
+		PLATFORM:       os.Getenv("PLATFORM"),
+		Secret:         os.Getenv("SECRET"),
 	}
 	counter.fileserverHits.Store(0)
 
@@ -145,6 +147,12 @@ func main() {
 			respondWithError(w, 500, errMsg)
 			return
 		}
+
+		if request.ExpiresInSeconds == nil || *(request.ExpiresInSeconds) > 3600 {
+			hourInSec := 3600
+			request.ExpiresInSeconds = &hourInSec
+		}
+
 		user, err := counter.dbQueries.GetUserByEmail(r.Context(), request.Email)
 		if err != nil {
 			respondWithError(w, 401, "Unauthorized")
@@ -155,11 +163,23 @@ func main() {
 			respondWithError(w, 401, "Unauthorized")
 			return
 		}
+		expiredTimeDuration, err := time.ParseDuration(fmt.Sprintf("%vs", *(request.ExpiresInSeconds)))
+		if err != nil {
+			respondWithError(w, 500, "could not convert time to duration")
+			return
+		}
+		token, err := auth.MakeJWT(user.ID, counter.Secret, expiredTimeDuration)
+		if err != nil {
+			respondWithError(w, 500, "could not make token")
+			return
+		}
+
 		respondWithJson(w, 200, userReturnEmail{
 			ID:        user.ID,
 			CreatedAT: user.CreatedAt,
 			UpdatedAt: user.UpdatedAt,
 			Email:     user.Email,
+			Token:     token,
 		})
 
 	})
@@ -176,6 +196,21 @@ func main() {
 			respondWithError(w, 500, errMsg)
 			return
 		}
+
+		token, err := auth.GetBearerToken(r.Header)
+		if err != nil {
+			errmsg := fmt.Sprintf("%v", err)
+			respondWithError(w, 401, errmsg)
+			return
+		}
+
+		userID, err := auth.ValidateJWT(token, counter.Secret)
+		if err != nil {
+			//fmt.Printf("userID: %v      request.UserID: %v", userID.String(), request.UserID.String())
+			respondWithError(w, 401, "Unauthorized")
+			return
+		}
+
 		//handling if the length of the request body(the message) is too long
 		if len(request.Body) > 140 {
 			respondWithError(w, 400, "Chirp is too long")
@@ -189,7 +224,7 @@ func main() {
 
 		input := database.CreateChirpParams{
 			Body:   cleanText,
-			UserID: request.UserID,
+			UserID: userID,
 		}
 		myChirp, err := counter.dbQueries.CreateChirp(r.Context(), input)
 		if err != nil {

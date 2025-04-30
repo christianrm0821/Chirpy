@@ -12,6 +12,7 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 	dbQueries      *database.Queries
 	PLATFORM       string
+	Secret         string
 }
 
 type resErr struct {
@@ -19,8 +20,9 @@ type resErr struct {
 }
 
 type email struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email            string `json:"email"`
+	Password         string `json:"password"`
+	ExpiresInSeconds *int   `json:"expires_in_seconds"`
 }
 
 type userReturnEmail struct {
@@ -28,11 +30,12 @@ type userReturnEmail struct {
 	CreatedAT time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Email     string    `json:"email"`
+	Token     string    `json:"token"`
 }
 
 type chirpPostReq struct {
-	Body   string    `json:"body"`
-	UserID uuid.UUID `json:"user_id"`
+	Body string `json:"body"`
+	// UserID uuid.UUID `json:"user_id"`
 }
 
 type validChirp struct {
