@@ -8,7 +8,7 @@ create table refresh_tokens(
     revoked_at timestamp,
     constraint fk_uid_users
         foreign key(user_id)
-        references(users(id)) on delete cascade   
+        references users(id) on delete cascade   
 );
 
 -- +goose Down

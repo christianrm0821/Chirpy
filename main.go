@@ -148,40 +148,141 @@ func main() {
 			return
 		}
 
-		if request.ExpiresInSeconds == nil || *(request.ExpiresInSeconds) > 3600 {
-			hourInSec := 3600
-			request.ExpiresInSeconds = &hourInSec
-		}
-
 		user, err := counter.dbQueries.GetUserByEmail(r.Context(), request.Email)
 		if err != nil {
 			respondWithError(w, 401, "Unauthorized")
 			return
 		}
+
+		//checks if the password is correct
 		err = auth.CheckPasswordHash(user.HashedPassword, request.Password)
 		if err != nil {
 			respondWithError(w, 401, "Unauthorized")
 			return
 		}
-		expiredTimeDuration, err := time.ParseDuration(fmt.Sprintf("%vs", *(request.ExpiresInSeconds)))
+
+		//This is getting a time of 1 hour which is the token life length
+		expiredTimeDuration, err := time.ParseDuration("1h")
 		if err != nil {
 			respondWithError(w, 500, "could not convert time to duration")
 			return
 		}
+
+		//makes a new token with current user ID, secret and expiration time
 		token, err := auth.MakeJWT(user.ID, counter.Secret, expiredTimeDuration)
 		if err != nil {
 			respondWithError(w, 500, "could not make token")
 			return
 		}
 
+		//make a new fresh token
+		freshToken, err := auth.MakeRefreshToken()
+		if err != nil {
+			respondWithError(w, 500, "could not produce a fresh token")
+			return
+		}
+
+		//gets 60 days since that is the expire time of the refresh token
+		expireTimeRefresh := time.Hour * 24 * 60
+
+		//create a struct to input the refresh token into the database
+		refreshTokenDataBase := database.CreateRefreshTokenParams{
+			Token:     freshToken,
+			CreatedAt: time.Now().UTC(),
+			UpdatedAt: time.Now().UTC(),
+			UserID:    user.ID,
+			ExpiresAt: time.Now().UTC().Add(expireTimeRefresh),
+			RevokedAt: sql.NullTime{Valid: false},
+		}
+
+		_, err = counter.dbQueries.CreateRefreshToken(r.Context(), refreshTokenDataBase)
+		if err != nil {
+			respondWithError(w, 500, "could not add refresh token to database")
+			return
+		}
+
 		respondWithJson(w, 200, userReturnEmail{
-			ID:        user.ID,
-			CreatedAT: user.CreatedAt,
-			UpdatedAt: user.UpdatedAt,
-			Email:     user.Email,
-			Token:     token,
+			ID:           user.ID,
+			CreatedAT:    user.CreatedAt,
+			UpdatedAt:    user.UpdatedAt,
+			Email:        user.Email,
+			Token:        token,
+			RefreshToken: freshToken,
 		})
 
+	})
+
+	//gets a new token for the given user and sets the lifespan to 1 hour
+	serveMux.HandleFunc("POST /api/refresh", func(w http.ResponseWriter, r *http.Request) {
+		token, err := auth.GetBearerToken(r.Header)
+		if err != nil {
+			respondWithError(w, 401, "Unauthorized")
+		}
+		user, err := counter.dbQueries.GetUserFromRefreshToken(r.Context(), token)
+		if err != nil {
+			respondWithError(w, 401, "token does not exist")
+			return
+		}
+		if time.Now().After(user.ExpiresAt) {
+			respondWithError(w, 401, "token has expired")
+			return
+		}
+		newToken, err := auth.MakeJWT(user.UserID, counter.Secret, time.Hour)
+		if err != nil {
+			respondWithError(w, 500, "could not make new token")
+			return
+		}
+		respondWithJson(w, 200, tokenResponse{
+			Token: newToken,
+		})
+	})
+
+	//sets the revoke time to current time
+	serveMux.HandleFunc("POST /api/revoke", func(w http.ResponseWriter, r *http.Request) {
+		//gets token from header
+		refreshToken, err := auth.GetBearerToken(r.Header)
+		if err != nil {
+			respondWithError(w, 401, "could not get token from header")
+			return
+		}
+
+		//get current user
+		user, err := counter.dbQueries.GetUserFromRefreshToken(r.Context(), refreshToken)
+		if err != nil {
+			w.WriteHeader(204)
+			return
+		}
+		if time.Now().After(user.ExpiresAt) {
+			w.WriteHeader(204)
+			return
+		}
+
+		if user.RevokedAt.Valid {
+			w.WriteHeader(204)
+			return
+		}
+
+		//gets current time to set in the database revoked time
+		newTime := sql.NullTime{
+			Time:  time.Now(),
+			Valid: true,
+		}
+
+		updatedToken := database.RevokeRefreshTokenParams{
+			RevokedAt: newTime,
+			UpdatedAt: time.Now(),
+			Token:     refreshToken,
+		}
+
+		//changes the revoke time, updated_at time for the given token
+		err = counter.dbQueries.RevokeRefreshToken(r.Context(), updatedToken)
+		if err != nil {
+			respondWithError(w, 500, "error updating the database")
+			return
+		}
+
+		//Sets header code to 204
+		w.WriteHeader(204)
 	})
 
 	//register the validate_chirp handler

@@ -9,7 +9,10 @@ import (
 func MakeRefreshToken() (string, error) {
 	randData := make([]byte, 32)
 
-	rand.Read(randData)
+	_, err := rand.Read(randData)
+	if err != nil {
+		return "", err
+	}
 	encodedStr := hex.EncodeToString(randData)
 	return encodedStr, nil
 }

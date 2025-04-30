@@ -19,18 +19,23 @@ type resErr struct {
 	Error string `json:"error"`
 }
 
+type tokenResponse struct {
+	Token string `json:"token"`
+}
+
 type email struct {
-	Email            string `json:"email"`
-	Password         string `json:"password"`
-	ExpiresInSeconds *int   `json:"expires_in_seconds"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	// ExpiresInSeconds *int   `json:"expires_in_seconds"`
 }
 
 type userReturnEmail struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAT time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
-	Token     string    `json:"token"`
+	ID           uuid.UUID `json:"id"`
+	CreatedAT    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Email        string    `json:"email"`
+	Token        string    `json:"token"`
+	RefreshToken string    `json:"refresh_token"`
 }
 
 type chirpPostReq struct {
