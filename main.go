@@ -197,7 +197,8 @@ func main() {
 
 		_, err = counter.dbQueries.CreateRefreshToken(r.Context(), refreshTokenDataBase)
 		if err != nil {
-			respondWithError(w, 500, "could not add refresh token to database")
+			errmsg := fmt.Sprintf("could not add refresh token to database: %v", err)
+			respondWithError(w, 500, errmsg)
 			return
 		}
 
@@ -227,6 +228,12 @@ func main() {
 			respondWithError(w, 401, "token has expired")
 			return
 		}
+
+		if user.RevokedAt.Valid {
+			respondWithError(w, 401, "token revoked")
+			return
+		}
+
 		newToken, err := auth.MakeJWT(user.UserID, counter.Secret, time.Hour)
 		if err != nil {
 			respondWithError(w, 500, "could not make new token")
