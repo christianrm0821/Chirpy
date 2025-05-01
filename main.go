@@ -63,6 +63,7 @@ func main() {
 		dbQueries:      database.New(db),
 		PLATFORM:       os.Getenv("PLATFORM"),
 		Secret:         os.Getenv("SECRET"),
+		PolkaKey:       os.Getenv("POLKA_KEY"),
 	}
 	counter.fileserverHits.Store(0)
 
@@ -483,9 +484,20 @@ func main() {
 	})
 
 	serveMux.HandleFunc("POST /api/polka/webhooks", func(w http.ResponseWriter, r *http.Request) {
+		requestAPIKey, err := auth.GetAPIKey(r.Header)
+		if err != nil {
+			errmsg := fmt.Sprintf("there was an error getting the apiKey Error: %v", err)
+			respondWithError(w, 401, errmsg)
+			return
+		}
+		if requestAPIKey != counter.PolkaKey {
+			respondWithError(w, 401, "wrong api key")
+			return
+		}
+
 		decoder := json.NewDecoder(r.Body)
 		request := polkaRequest{}
-		err := decoder.Decode(&request)
+		err = decoder.Decode(&request)
 		if err != nil {
 			errmsg := fmt.Sprintf("error decoding request Error: %v", err)
 			respondWithError(w, 500, errmsg)

@@ -13,6 +13,7 @@ type apiConfig struct {
 	dbQueries      *database.Queries
 	PLATFORM       string
 	Secret         string
+	PolkaKey       string
 }
 
 type resErr struct {
