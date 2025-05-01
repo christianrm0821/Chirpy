@@ -362,6 +362,7 @@ func main() {
 	})
 
 	//register the validate_chirp handler
+	//Makes sure chirp is valid
 	serveMux.HandleFunc("POST /api/chirps", func(w http.ResponseWriter, r *http.Request) {
 		//get the information and putting it into request
 		decoder := json.NewDecoder(r.Body)
@@ -429,6 +430,7 @@ func main() {
 		respondWithJson(w, 200, valChirps)
 	})
 
+	//Gets a specific chirp given with the ID
 	serveMux.HandleFunc("GET /api/chirps/{chirpID}", func(w http.ResponseWriter, r *http.Request) {
 		chirpID := r.PathValue("chirpID")
 		myChirp, err := counter.dbQueries.GetChirpWithID(r.Context(), uuid.MustParse(chirpID))
@@ -438,6 +440,44 @@ func main() {
 			return
 		}
 		respondWithJson(w, 200, mapChirpToValidChirp(myChirp))
+	})
+
+	//delete a specific chirp
+	serveMux.HandleFunc("DELETE /api/chirps/{chirpID}", func(w http.ResponseWriter, r *http.Request) {
+		userToken, err := auth.GetBearerToken(r.Header)
+		if err != nil {
+			errmsg := fmt.Sprintf("error getting token from header Error: %v", err)
+			respondWithError(w, 401, errmsg)
+			return
+		}
+
+		userIDToken, err := auth.ValidateJWT(userToken, counter.Secret)
+		if err != nil {
+			errmsg := fmt.Sprintf("could not validate user from token Error: %v", err)
+			respondWithError(w, 500, errmsg)
+			return
+		}
+
+		chirpID := r.PathValue("chirpID")
+		myChirp, err := counter.dbQueries.GetChirpWithID(r.Context(), uuid.MustParse(chirpID))
+		if err != nil {
+			errmsg := fmt.Sprintf("error getting chirp with given ID Error: %v", err)
+			respondWithError(w, 404, errmsg)
+			return
+		}
+
+		if myChirp.UserID != userIDToken {
+			respondWithError(w, 403, "Unauthorized")
+			return
+		}
+
+		err = counter.dbQueries.DeleteChirpWithID(r.Context(), uuid.MustParse(chirpID))
+		if err != nil {
+			errmsg := fmt.Sprintf("could not delete chirp Error: %v", err)
+			respondWithError(w, 500, errmsg)
+			return
+		}
+		respondWithJson(w, 204, email{})
 	})
 
 	//making the server struct
