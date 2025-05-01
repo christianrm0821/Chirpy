@@ -130,10 +130,11 @@ func main() {
 			return
 		}
 		respondWithJson(w, 201, userReturnEmail{
-			ID:        user.ID,
-			CreatedAT: user.CreatedAt,
-			UpdatedAt: user.UpdatedAt,
-			Email:     user.Email,
+			ID:            user.ID,
+			CreatedAT:     user.CreatedAt,
+			UpdatedAt:     user.UpdatedAt,
+			Email:         user.Email,
+			Is_Chirpy_Red: user.IsChirpyRed,
 		})
 	})
 
@@ -272,12 +273,13 @@ func main() {
 		}
 
 		respondWithJson(w, 200, userReturnEmail{
-			ID:           user.ID,
-			CreatedAT:    user.CreatedAt,
-			UpdatedAt:    user.UpdatedAt,
-			Email:        user.Email,
-			Token:        token,
-			RefreshToken: freshToken,
+			ID:            user.ID,
+			CreatedAT:     user.CreatedAt,
+			UpdatedAt:     user.UpdatedAt,
+			Email:         user.Email,
+			Token:         token,
+			RefreshToken:  freshToken,
+			Is_Chirpy_Red: user.IsChirpyRed,
 		})
 
 	})
@@ -474,6 +476,35 @@ func main() {
 		err = counter.dbQueries.DeleteChirpWithID(r.Context(), uuid.MustParse(chirpID))
 		if err != nil {
 			errmsg := fmt.Sprintf("could not delete chirp Error: %v", err)
+			respondWithError(w, 500, errmsg)
+			return
+		}
+		respondWithJson(w, 204, email{})
+	})
+
+	serveMux.HandleFunc("POST /api/polka/webhooks", func(w http.ResponseWriter, r *http.Request) {
+		decoder := json.NewDecoder(r.Body)
+		request := polkaRequest{}
+		err := decoder.Decode(&request)
+		if err != nil {
+			errmsg := fmt.Sprintf("error decoding request Error: %v", err)
+			respondWithError(w, 500, errmsg)
+		}
+		if request.Event != "user.upgraded" {
+			respondWithJson(w, 204, email{})
+			return
+		}
+
+		user, err := counter.dbQueries.GetUserFromID(r.Context(), uuid.MustParse(request.Data.UserID))
+		if err != nil {
+			errmsg := fmt.Sprintf("user cannot be found Error: %v", err)
+			respondWithError(w, 404, errmsg)
+			return
+		}
+
+		err = counter.dbQueries.UpdateUserSubWithID(r.Context(), user.ID)
+		if err != nil {
+			errmsg := fmt.Sprintf("error updating subscription Error: %v", err)
 			respondWithError(w, 500, errmsg)
 			return
 		}

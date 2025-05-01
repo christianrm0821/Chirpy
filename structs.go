@@ -28,21 +28,21 @@ type email struct {
 	Password string `json:"password"`
 }
 
-/*
-	type userInfoReturned struct {
-		ID        uuid.UUID `json:"id"`
-		CreatedAT time.Time `json:"created_at"`
-		UpdatedAt time.Time `json:"updated_at"`
-		Email     string    `json:"email"`
-	}
-*/
 type userReturnEmail struct {
-	ID           uuid.UUID `json:"id"`
-	CreatedAT    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	Email        string    `json:"email"`
-	Token        string    `json:"token"`
-	RefreshToken string    `json:"refresh_token"`
+	ID            uuid.UUID `json:"id"`
+	CreatedAT     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	Email         string    `json:"email"`
+	Token         string    `json:"token"`
+	RefreshToken  string    `json:"refresh_token"`
+	Is_Chirpy_Red bool      `json:"is_chirpy_red"`
+}
+
+type polkaRequest struct {
+	Event string `json:"event"`
+	Data  struct {
+		UserID string `json:"user_id"`
+	} `json:"Data"`
 }
 
 type chirpPostReq struct {
