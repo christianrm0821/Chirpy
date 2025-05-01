@@ -26,9 +26,16 @@ type tokenResponse struct {
 type email struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
-	// ExpiresInSeconds *int   `json:"expires_in_seconds"`
 }
 
+/*
+	type userInfoReturned struct {
+		ID        uuid.UUID `json:"id"`
+		CreatedAT time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Email     string    `json:"email"`
+	}
+*/
 type userReturnEmail struct {
 	ID           uuid.UUID `json:"id"`
 	CreatedAT    time.Time `json:"created_at"`

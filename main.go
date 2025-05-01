@@ -137,6 +137,75 @@ func main() {
 		})
 	})
 
+	serveMux.HandleFunc("PUT /api/users", func(w http.ResponseWriter, r *http.Request) {
+		//get token from header
+		actualToken, err := auth.GetBearerToken(r.Header)
+		if err != nil {
+			errmsg := fmt.Sprintf("could not get token from header Error: %v", err)
+			respondWithError(w, 401, errmsg)
+			return
+		}
+
+		//get userID from token
+		userID, err := auth.ValidateJWT(actualToken, counter.Secret)
+		if err != nil {
+			errmsg := fmt.Sprintf("error validating token Error: %v", err)
+			respondWithError(w, 401, errmsg)
+			return
+		}
+
+		//decode request
+		decoder := json.NewDecoder(r.Body)
+		request := email{}
+		err = decoder.Decode(&request)
+		if err != nil {
+			errmsg := fmt.Sprintf("error decoding request Error: %v", err)
+			respondWithError(w, 500, errmsg)
+			return
+		}
+
+		myHashedPassword, err := auth.HashPassword(request.Password)
+		if err != nil {
+			errmsg := fmt.Sprintf("error hashing password Error: %v", err)
+			respondWithError(w, 500, errmsg)
+			return
+		}
+		err = auth.CheckPasswordHash(myHashedPassword, request.Password)
+		if err != nil {
+			errmsg := fmt.Sprintf("hashed password and password do not match Error: %v", err)
+			respondWithError(w, 500, errmsg)
+			return
+		}
+
+		newUserPasswordEmail := database.UpdatePasswordEmailFromUserIDParams{
+			HashedPassword: myHashedPassword,
+			Email:          request.Email,
+			ID:             userID,
+		}
+
+		err = counter.dbQueries.UpdatePasswordEmailFromUserID(r.Context(), newUserPasswordEmail)
+		if err != nil {
+			errmsg := fmt.Sprintf("error updating password Error: %v", err)
+			respondWithError(w, 500, errmsg)
+			return
+		}
+
+		userInfo, err := counter.dbQueries.GetUserFromID(r.Context(), userID)
+		if err != nil {
+			errmsg := fmt.Sprintf("error getting user information Error: %v", err)
+			respondWithError(w, 401, errmsg)
+			return
+		}
+
+		respondWithJson(w, 200, userReturnEmail{
+			ID:        userID,
+			CreatedAT: userInfo.CreatedAt,
+			UpdatedAt: userInfo.UpdatedAt,
+			Email:     userInfo.Email,
+		})
+
+	})
+
 	//register the login handler
 	serveMux.HandleFunc("POST /api/login", func(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
