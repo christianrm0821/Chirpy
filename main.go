@@ -114,7 +114,7 @@ func main() {
 		//hash password
 		hashed_password, err := auth.HashPassword(request.Password)
 		if err != nil {
-			log.Fatal("error hashing the password: ", err)
+			//log.Fatal("error hashing the password: ", err)
 			errMsg := fmt.Sprintf("error hashing password %v", err)
 			respondWithError(w, 500, errMsg)
 		}
