@@ -419,11 +419,37 @@ func main() {
 
 	//register getting all chirps in database
 	serveMux.HandleFunc("GET /api/chirps", func(w http.ResponseWriter, r *http.Request) {
-		chirps, err := counter.dbQueries.GetAllChirps(r.Context())
-		if err != nil {
-			errmsg := fmt.Sprintf("error getting the chirps: %v", err)
-			respondWithError(w, 500, errmsg)
-			return
+		authorID := r.URL.Query().Get("author_id")
+		sort := r.URL.Query().Get("sort")
+		var chirps []database.Chirp
+		if (authorID == "") && (sort == "desc") {
+			chirps, err = counter.dbQueries.GetAllChirpsDesc(r.Context())
+			if err != nil {
+				errmsg := fmt.Sprintf("error getting the chirps desc: %v", err)
+				respondWithError(w, 500, errmsg)
+				return
+			}
+		} else if (authorID == "") && (sort != "desc") {
+			chirps, err = counter.dbQueries.GetAllChirps(r.Context())
+			if err != nil {
+				errmsg := fmt.Sprintf("error getting all chirps asc Error: %v", err)
+				respondWithError(w, 500, errmsg)
+				return
+			}
+		} else if sort == "desc" {
+			chirps, err = counter.dbQueries.GetAllChirpFromIDDesc(r.Context(), uuid.MustParse(authorID))
+			if err != nil {
+				errmsg := fmt.Sprintf("error getting chirps of author in desc Error: %v", err)
+				respondWithError(w, 500, errmsg)
+				return
+			}
+		} else {
+			chirps, err = counter.dbQueries.GetAllChripsFromID(r.Context(), uuid.MustParse(authorID))
+			if err != nil {
+				errmsg := fmt.Sprintf("author not found Error: %v", err)
+				respondWithError(w, 404, errmsg)
+				return
+			}
 		}
 		var valChirps []validChirp
 		for _, val := range chirps {
