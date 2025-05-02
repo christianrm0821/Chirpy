@@ -13,9 +13,13 @@
 }
 ```
 
-### GET /admin/metrics
+### GET /admin/********
 
-### POST /admin/reset
+Shows how many times chirp has been visited
+
+### POST /admin/******
+
+Removes all the users that are registered
 
 ### "POST /api/users"
 
